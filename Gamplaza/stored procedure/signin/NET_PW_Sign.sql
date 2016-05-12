@@ -1,611 +1,225 @@
-
--- Batch submitted through debugger: SQLQuery_deluse.sql|0|0|C:\Users\Administrator\Documents\SQL Server Management Studio\Projects\SQLQuery_deluse.sql
--- Batch submitted through debugger: [NET_PW_Sign]_1.sql|0|0|C:\Users\Administrator\Documents\SQL Server Management Studio\Projects\[NET_PW_Sign]_1.sql
-ALTER PROC [dbo].[NET_PW_Sign]
+USE [qptreasuredb]
+GO
+/****** Object:  StoredProcedure [dbo].[NET_PW_Sign]    Script Date: 05/12/2016 12:33:09 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[NET_PW_Sign]
 @UserID INT,
-@BqNum INT, --补签第几天  默认值是0,代表不是补签
-@Flag INT,  --0获取该玩家签到信息，1执行该玩家签到操作
-@strErrorDescribe	NVARCHAR(127) OUTPUT--输出信息
+@BqNum INT, --��ǩ�ڼ���  Ĭ��ֵ��0,�������ǲ�ǩ
+@Flag INT,  --0��ȡ�����ǩ����Ϣ��1ִ�и����ǩ������
+@strErrorDescribe	NVARCHAR(127) OUTPUT--�����Ϣ
 AS
-BEGIN
+	
+	-----------------------------------------��������-----------------------------------------
+	SET NOCOUNT ON
 
-	DECLARE @Score INT,@Type INT,@LastSignDate DATETIME,@FirstSignDate DATETIME,@NUM INT,@Continuous INT,@GetDAY INT,@IsAllDaySigned INT
+	-----------------------------------------��������-----------------------------------------
+BEGIN
+	DECLARE @tlbSignDayStatus table(DayNum int, SignedStatus int)
+	DECLARE @DayCnt int, @ScoreToday int
+	--DECLARE @DayString varchar(30)
+	DECLARE @Type INT,@LastSignDate DATETIME,@Continuous INT,@IsAllDaySigned INT  --@FirstSignDate DATETIME,@Score INT,@GetDAY INT,
 	DECLARE @OneDay INT,@TwoDay INT,@ThreeDay INT,@FourDay INT,@FiveDay INT,@SixDay INT,@SevenDay INT,@AllDay INT,@BqScore INT
-	DECLARE @Day1 INT,@Day2 INT,@Day3 INT,@Day4 INT,@Day5 INT,@Day6 INT,@Day7 INT	
-	SET @Day1=0; --0是未签到  1是签到
-	SET @Day3=0;
-	SET @Day2=0;
-	SET @Day4=0;
-	SET @Day5=0;
-	SET @Day6=0;
-	SET @Day7=0;
-	SET @IsAllDaySigned=0;
+	DECLARE @Day1 INT,@Day2 INT,@Day3 INT,@Day4 INT,@Day5 INT,@Day6 INT,@Day7 INT, @ReturnValue INT
+	DECLARE @SignToday INT 		--�����ǩ���ڼ���
+	DECLARE @BSignType INT 		--��ǩ����0 , ��ʾ��ͨǩ��, 1��ʾ��ǩ
+	DECLARE	@SignDate DATETIME 	--����ǩ��������
+	DECLARE	@BSignDate DATETIME	
+	--DECLARE @ShsScore BIGINT
 	
-	--@Type签到类型（0按次数，1按天数，2补签）
-	SELECT @Type=[Type],@OneDay=OneDay,@TwoDay=TwoDay,@ThreeDay=ThreeDay,@FourDay=FourDay,@FiveDay=FiveDay,@SixDay=SixDay,@SevenDay=SevenDay,@AllDay=AllDay,@BqScore=BqScore FROM QPTreasureDB.dbo.SignDay
-	SELECT TOP 1 @Continuous=Continuous,@LastSignDate=SignDate FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID ORDER BY SignDate DESC
+	-----------------------------------------��ʼ��-------------------------------------------
+	SET @Day1=0 --0��δǩ��  1��ǩ��
+	SET @Day3=0
+	SET @Day2=0
+	SET @Day4=0
+	SET @Day5=0
+	SET @Day6=0
+	SET @Day7=0
+	SET @IsAllDaySigned=0
+	SET @SignToday=1
+	SET @BSignType=0
+	SET @BSignDate=0
+	SET @SignDate=GETDATE()
+	SELECT @Type=[Type],@OneDay=OneDay,@TwoDay=TwoDay,@ThreeDay=ThreeDay,@FourDay=FourDay,@FiveDay=FiveDay,@SixDay=SixDay,@SevenDay=SevenDay,@AllDay=AllDay,@BqScore=BqScore FROM QPTreasureDB.dbo.SignDay(NOLOCK) WHERE ID=1
 	
-	IF(@Flag=0)
-		BEGIN
-			IF EXISTS (SELECT UserID FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous=1)
-				BEGIN
-					SET @Day1=1;
-					SET @NUM=2;
-				END
-			IF EXISTS (SELECT UserID FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous=2)
-				BEGIN
-					SET @Day2=1;
-					SET @NUM=3;
-				END
-			IF EXISTS (SELECT UserID FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous=3)
-				BEGIN
-					SET @Day3=1;
-					SET @NUM=4;
-				END
-			IF EXISTS (SELECT UserID FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous=4)
-				BEGIN
-					SET @Day4=1;
-					SET @NUM=5;
-				END
-			IF EXISTS (SELECT UserID FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous=5)
-				BEGIN
-					SET @Day5=1;
-					SET @NUM=6;
-				END
-			IF EXISTS (SELECT UserID FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous=6)
-				BEGIN
-					SET @Day6=1;
-					SET @NUM=7;
-				END
-			IF EXISTS (SELECT UserID FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous=7)
-				BEGIN
-					SET @Day7=1;
-					SET @NUM=0;
-				END
+	SELECT TOP 1 @Continuous=Continuous,@LastSignDate=SignDate FROM QPTreasureDB.dbo.SignLog(NOLOCK) WHERE UserID=@UserID ORDER BY SignDate DESC
+
+	--SELECT @FirstSignDate=SignDate FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous=1
+	--SELECT @ShsScore=Score FROM QPTreasureDB.dbo.GameScoreInfo WHERE UserID=@UserID	
+	
+	--IF NOT EXISTS (SELECT TOP 1 Continuous,SignDate FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID ORDER BY SignDate DESC)
+	IF(@Continuous IS NULL)
+	BEGIN
+		SET @Continuous=0
+	END
+	
+	--IF NOT EXISTS (SELECT SignDate FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous=1)
+	--IF(@FirstSignDate IS NULL)
+	--BEGIN
+	--	SET @FirstSignDate=GETDATE()
+	--END
+	
+	--IF NOT EXISTS (SELECT Score FROM QPTreasureDB.dbo.GameScoreInfo WHERE UserID=@UserID)
+	--IF(@ShsScore IS NULL)
+	--BEGIN
+	--	SET @ShsScore=0
+	--END
+	-----------------------------------------------------------------------------
+	
+	IF(@Type = 0)
+	BEGIN
+		IF (DATEDIFF(DAY, CONVERT(NVARCHAR(10),@LastSignDate,120),CONVERT(NVARCHAR(10),GETDATE(),120))=0)
+			BEGIN
+				SET @SignToday=@Continuous;
+			END
+		ELSE
+			BEGIN
+				SET @SignToday=@Continuous+1
+			END
+	END
+	
+	--ELSE IF(@Type = 1)
+	--BEGIN
+	--	IF (ISNULL(@Continuous,0)=0 OR ISNULL(DATEDIFF(DAY, CONVERT(NVARCHAR(10),@LastSignDate,120),CONVERT(NVARCHAR(10),GETDATE(),120)),0)>=2)
+	--		BEGIN
+	--		DELETE FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID
+	--		END
 			
-			IF((@Type=2) OR (@Type=1))
+	--	IF EXISTS (SELECT SignDate FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous=1)
+	--		BEGIN
+	--			SET @SignToday=DATEDIFF(DAY, CONVERT(NVARCHAR(10),@FirstSignDate,120),CONVERT(NVARCHAR(10),GETDATE(),120))+1;
+	--		END
+	--	ELSE
+	--		BEGIN
+	--			SET @SignToday=1;
+	--		END
+	--END
+
+	--ELSE IF(@Type = 2)
+	--BEGIN
+	--	IF EXISTS (SELECT SignDate FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous=1)
+	--		BEGIN
+	--			SET @SignToday=DATEDIFF(DAY, CONVERT(NVARCHAR(10),@FirstSignDate,120),CONVERT(NVARCHAR(10),GETDATE(),120))+1;
+	--		END
+	--	ELSE
+	--		BEGIN
+	--			SET @SignToday=1
+	--		END
+		
+	--	IF(@BqNum>0)
+	--	BEGIN
+	--		SET @BSignType=1
+	--		SET @SignToday=@BqNum
+	--		SET @BSignDate=GETDATE()
+	--		SET @SignDate=@FirstSignDate+@BqNum-1
+	--	END
+	--END
+	
+	-----------------------------------------------------------------------------
+	--ǩ����ѯ
+	IF(@Flag=0)
+	BEGIN
+      SET @DayCnt = 1;--ѭ������               
+      WHILE(@DayCnt <= 7)
+		BEGIN
+			IF EXISTS (SELECT UserID FROM QPTreasureDB.dbo.SignLog(NOLOCK) WHERE UserID=@UserID AND Continuous=@DayCnt)
 				BEGIN
-					SET @NUM=1;
-					IF EXISTS (SELECT @FirstSignDate=SignDate FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous=1)
-						BEGIN
-							SET @NUM=DATEDIFF(DAY, CONVERT(NVARCHAR(10),@SignDate,120),CONVERT(NVARCHAR(10),GETDATE(),120))+1;
-						END
+					INSERT @tlbSignDayStatus (DayNum, SignedStatus) VALUES (@DayCnt, 1)
 				END
-		 
-			IF(@Type=2) --包含补签
-				BEGIN 
-					--第一天是否签到,第二天是否签到,第三天是否签到,第四天是否签到,第五天是否签到,第六天是否签到,第七天是否签到,是否补签,第一天奖励,第二天奖励,第三天奖励,第四天奖励,第五天奖励,第六天奖励,第七天奖励,满七天赠送奖励,补签所需花费金币数, 今天是第几天签到
-					SELECT @Day1 AS Day1,@Day2 AS Day2,@Day3 AS Day3,@Day4 AS Day4,@Day5 AS Day5,@Day6 AS Day6,@Day7 AS Day7,'2' AS IsBq,@OneDay AS OneDay,@TwoDay AS TwoDay,@ThreeDay AS ThreeDay,@FourDay AS FourDay,@FiveDay AS FiveDay,@SixDay AS SixDay,@SevenDay AS SevenDay,@AllDay AS AllDay,@BqScore AS BqScore, @NUM AS NUM
-					
-					RETURN 22
-				END
-			ELSE IF(@Type=1) --按天数
+			ELSE
 				BEGIN
-					--第一天是否签到,第二天是否签到,第三天是否签到,第四天是否签到,第五天是否签到,第六天是否签到,第七天是否签到,是否补签,第一天奖励,第二天奖励,第三天奖励,第四天奖励,第五天奖励,第六天奖励,第七天奖励,满七天赠送奖励,补签所需花费金币数
-					SELECT @Day1 AS Day1,@Day2 AS Day2,@Day3 AS Day3,@Day4 AS Day4,@Day5 AS Day5,@Day6 AS Day6,@Day7 AS Day7,'1' AS IsBq,@OneDay AS OneDay,@TwoDay AS TwoDay,@ThreeDay AS ThreeDay,@FourDay AS FourDay,@FiveDay AS FiveDay,@SixDay AS SixDay,@SevenDay AS SevenDay,@AllDay AS AllDay,@BqScore AS BqScore, @Continuous AS Continuous, @NUM AS NUM
-					
-					RETURN 22
+					INSERT @tlbSignDayStatus (DayNum, SignedStatus) VALUES (@DayCnt, 0)
 				END
-			ELSE IF(@Type=0) --按次数
-				BEGIN
-					--第一天是否签到,第二天是否签到,第三天是否签到,第四天是否签到,第五天是否签到,第六天是否签到,第七天是否签到,是否补签,第一天奖励,第二天奖励,第三天奖励,第四天奖励,第五天奖励,第六天奖励,第七天奖励,满七天赠送奖励,补签所需花费金币数
-					SELECT @Day1 AS Day1,@Day2 AS Day2,@Day3 AS Day3,@Day4 AS Day4,@Day5 AS Day5,@Day6 AS Day6,@Day7 AS Day7,'0' AS IsBq,@OneDay AS OneDay,@TwoDay AS TwoDay,@ThreeDay AS ThreeDay,@FourDay AS FourDay,@FiveDay AS FiveDay,@SixDay AS SixDay,@SevenDay AS SevenDay,@AllDay AS AllDay,@BqScore AS BqScore, @Continuous AS Continuous, @NUM AS NUM
-					
-					RETURN 22
-				END
+				
+				SET @DayCnt = @DayCnt + 1
 		END
+
+			SELECT @Day1 = SignedStatus FROM @tlbSignDayStatus WHERE DayNum=1
+			SELECT @Day2 = SignedStatus FROM @tlbSignDayStatus WHERE DayNum=2
+			SELECT @Day3 = SignedStatus FROM @tlbSignDayStatus WHERE DayNum=3
+			SELECT @Day4 = SignedStatus FROM @tlbSignDayStatus WHERE DayNum=4
+			SELECT @Day5 = SignedStatus FROM @tlbSignDayStatus WHERE DayNum=5
+			SELECT @Day6 = SignedStatus FROM @tlbSignDayStatus WHERE DayNum=6
+			SELECT @Day7 = SignedStatus FROM @tlbSignDayStatus WHERE DayNum=7
+
+		SELECT @Day1 AS Day1,@Day2 AS Day2,@Day3 AS Day3,@Day4 AS Day4,@Day5 AS Day5,@Day6 AS Day6,@Day7 AS Day7,@Type AS IsBq,@OneDay AS OneDay,@TwoDay AS TwoDay,@ThreeDay AS ThreeDay,@FourDay AS FourDay,@FiveDay AS FiveDay,@SixDay AS SixDay,@SevenDay AS SevenDay,@AllDay AS AllDay,@BqScore AS BqScore, @Continuous AS Continuous, @SignToday AS SignToday
+		SET @strErrorDescribe=N'���ݲ�ѯ�ɹ�'
+		SET @ReturnValue=22
+		RETURN @ReturnValue
+	END
+
+	--ǩ������
 	ELSE IF(@Flag=1)
 		BEGIN
-			IF(@Type=0)--按次数
+			--�ظ�ǩ���ж�
+			IF EXISTS (SELECT UserID FROM QPTreasureDB.dbo.SignLog(NOLOCK) WHERE UserID=@UserID AND CONVERT(NVARCHAR(10),SignDate,120)=CONVERT(NVARCHAR(10),GETDATE(),120)) --AND (@BqNum=0)
 				BEGIN
-					IF EXISTS (SELECT UserID FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND CONVERT(NVARCHAR(10),SignDate,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-						BEGIN
-							SET @strErrorDescribe=N'今日已签到！'
-							
-							RETURN 26
-						END
-					ELSE
-						BEGIN
-							IF(ISNULL(@Continuous,0)=0)
-								BEGIN
-									UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@OneDay,ALLScore=ALLScore+@OneDay WHERE UserID=@UserID
-									INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@OneDay,GETDATE(),0,1,GETDATE())
-									IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-										BEGIN
-											UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@OneDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-										END
-									ELSE
-										BEGIN
-											INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@OneDay,GETDATE())
-										END
-								END
-							ELSE IF(ISNULL(@Continuous,0)=1)
-								BEGIN
-									UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@TwoDay,ALLScore=ALLScore+@TwoDay WHERE UserID=@UserID
-									INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@TwoDay,GETDATE(),0,2,GETDATE())
-									IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-										BEGIN
-											UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@TwoDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-										END
-									ELSE
-										BEGIN
-											INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@TwoDay,GETDATE())
-										END
-								END
-							ELSE IF(ISNULL(@Continuous,0)=2)
-								BEGIN
-									UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@ThreeDay,ALLScore=ALLScore+@ThreeDay WHERE UserID=@UserID
-									INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@ThreeDay,GETDATE(),0,3,GETDATE())
-									IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-										BEGIN
-											UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@ThreeDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-										END
-									ELSE
-										BEGIN
-											INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@ThreeDay,GETDATE())
-										END
-								END
-							ELSE IF(ISNULL(@Continuous,0)=3)
-								BEGIN
-									UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@FourDay,ALLScore=ALLScore+@FourDay WHERE UserID=@UserID
-									INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@FourDay,GETDATE(),0,4,GETDATE())
-									IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-										BEGIN
-											UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@FourDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-										END
-									ELSE
-										BEGIN
-											INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@FourDay,GETDATE())
-										END
-								END
-							ELSE IF(ISNULL(@Continuous,0)=4)
-								BEGIN
-									UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@FiveDay,ALLScore=ALLScore+@FiveDay WHERE UserID=@UserID
-									INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@FiveDay,GETDATE(),0,5,GETDATE())
-									IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-										BEGIN
-											UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@FiveDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-										END
-									ELSE
-										BEGIN
-											INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@FiveDay,GETDATE())
-										END
-								END
-							ELSE IF(ISNULL(@Continuous,0)=5)
-								BEGIN
-									UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@SixDay,ALLScore=ALLScore+@SixDay WHERE UserID=@UserID
-									INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@SixDay,GETDATE(),0,6,GETDATE())
-									IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-										BEGIN
-											UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@SixDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-										END
-									ELSE
-										BEGIN
-											INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@SixDay,GETDATE())
-										END
-								END
-							ELSE IF(ISNULL(@Continuous,0)=6)
-								BEGIN
-									SET IsAllDaySigned=1;
-									UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@SevenDay+@AllDay,ALLScore=ALLScore+@SevenDay+@AllDay WHERE UserID=@UserID
-									INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@SevenDay+@AllDay,GETDATE(),0,7,GETDATE())
-									IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-										BEGIN
-											UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@SevenDay+@AllDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-										END
-									ELSE
-										BEGIN
-											INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@SevenDay+@AllDay,GETDATE())
-										END
-								END
-							ELSE IF(ISNULL(@Continuous,0)=7)
-								BEGIN
-									DELETE FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID
-									UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@OneDay,ALLScore=ALLScore+@OneDay WHERE UserID=@UserID
-									INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@OneDay,GETDATE(),0,1,GETDATE())
-									IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-										BEGIN
-											UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@OneDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-										END
-									ELSE
-										BEGIN
-											INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@OneDay,GETDATE())
-										END
-								END
-							
-							SET @strErrorDescribe=N'签到成功！'
-							
-							SELECT @IsAllDaySigned AS IsAllDaySigned
-							
-							RETURN 24
-						END
+					SET @strErrorDescribe=N'������ǩ����'
+					SET @ReturnValue=25
+					RETURN @ReturnValue
 				END
-			ELSE IF(@Type=1)  --按天数
-				BEGIN
-					IF EXISTS (SELECT UserID FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND CONVERT(NVARCHAR(10),SignDate,120)=CONVERT(NVARCHAR(10),GETDATE(),120) AND SignType=0)
-						BEGIN
-							SET @strErrorDescribe=N'今日已签到！'
-							
-							RETURN 26
-						END
-					ELSE
-						BEGIN
-							IF(ISNULL(@Continuous,0)=0 OR ISNULL(DATEDIFF(DAY, CONVERT(NVARCHAR(10),@SignDate,120),CONVERT(NVARCHAR(10),GETDATE(),120)),0)=0 OR ISNULL(DATEDIFF(DAY, CONVERT(NVARCHAR(10),@SignDate,120),CONVERT(NVARCHAR(10),GETDATE(),120)),0)>=2)
-								BEGIN
-									DELETE FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID
-									UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@OneDay,ALLScore=ALLScore+@OneDay WHERE UserID=@UserID
-									INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@OneDay,GETDATE(),0,1,GETDATE())
-									IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-										BEGIN
-											UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@OneDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-										END
-									ELSE
-										BEGIN
-											INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@OneDay,GETDATE())
-										END
-								END
-							ELSE IF(ISNULL(@Continuous,0)=1 AND ISNULL(DATEDIFF(DAY, CONVERT(NVARCHAR(10),@SignDate,120),CONVERT(NVARCHAR(10),GETDATE(),120)),0)=1)
-								BEGIN
-									UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@TwoDay,ALLScore=ALLScore+@TwoDay WHERE UserID=@UserID
-									INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@TwoDay,GETDATE(),0,2,GETDATE())
-									IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-										BEGIN
-											UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@TwoDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-										END
-									ELSE
-										BEGIN
-											INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@TwoDay,GETDATE())
-										END
-								END
-							ELSE IF(ISNULL(@Continuous,0)=2 AND ISNULL(DATEDIFF(DAY, CONVERT(NVARCHAR(10),@SignDate,120),CONVERT(NVARCHAR(10),GETDATE(),120)),0)=1)
-								BEGIN
-									UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@ThreeDay,ALLScore=ALLScore+@ThreeDay WHERE UserID=@UserID
-									INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@ThreeDay,GETDATE(),0,3,GETDATE())
-									IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-										BEGIN
-											UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@ThreeDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-										END
-									ELSE
-										BEGIN
-											INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@ThreeDay,GETDATE())
-										END
-								END
-							ELSE IF(ISNULL(@Continuous,0)=3 AND ISNULL(DATEDIFF(DAY, CONVERT(NVARCHAR(10),@SignDate,120),CONVERT(NVARCHAR(10),GETDATE(),120)),0)=1)
-								BEGIN
-									UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@FourDay,ALLScore=ALLScore+@FourDay WHERE UserID=@UserID
-									INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@FourDay,GETDATE(),0,4,GETDATE())
-									IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-										BEGIN
-											UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@FourDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-										END
-									ELSE
-										BEGIN
-											INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@FourDay,GETDATE())
-										END
-								END
-							ELSE IF(ISNULL(@Continuous,0)=4 AND ISNULL(DATEDIFF(DAY, CONVERT(NVARCHAR(10),@SignDate,120),CONVERT(NVARCHAR(10),GETDATE(),120)),0)=1)
-								BEGIN
-									UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@FiveDay,ALLScore=ALLScore+@FiveDay WHERE UserID=@UserID
-									INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@FiveDay,GETDATE(),0,5,GETDATE())
-									IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-										BEGIN
-											UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@FiveDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-										END
-									ELSE
-										BEGIN
-											INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@FiveDay,GETDATE())
-										END
-								END
-							ELSE IF(ISNULL(@Continuous,0)=5 AND ISNULL(DATEDIFF(DAY, CONVERT(NVARCHAR(10),@SignDate,120),CONVERT(NVARCHAR(10),GETDATE(),120)),0)=1)
-								BEGIN
-									UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@SixDay,ALLScore=ALLScore+@SixDay WHERE UserID=@UserID
-									INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@SixDay,GETDATE(),0,6,GETDATE())
-									IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-										BEGIN
-											UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@SixDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-										END
-									ELSE
-										BEGIN
-											INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@SixDay,GETDATE())
-										END
-								END
-							ELSE IF(ISNULL(@Continuous,0)=6 AND ISNULL(DATEDIFF(DAY, CONVERT(NVARCHAR(10),@SignDate,120),CONVERT(NVARCHAR(10),GETDATE(),120)),0)=1)
-								BEGIN
-									SET IsAllDaySigned=1;
-									UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@SevenDay+@AllDay,ALLScore=ALLScore+@SevenDay+@AllDay WHERE UserID=@UserID
-									INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@SevenDay+@AllDay,GETDATE(),0,7,GETDATE())
-									IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-										BEGIN
-											UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@SevenDay+@AllDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-										END
-									ELSE
-										BEGIN
-											INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@SevenDay+@AllDay,GETDATE())
-										END
-								END
-							ELSE IF(ISNULL(@Continuous,0)=7 AND ISNULL(DATEDIFF(DAY, CONVERT(NVARCHAR(10),@SignDate,120),CONVERT(NVARCHAR(10),GETDATE(),120)),0)=1)
-								BEGIN
-									DELETE FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID
-									UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@OneDay,ALLScore=ALLScore+@OneDay WHERE UserID=@UserID
-									INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@OneDay,GETDATE(),0,1,GETDATE())
-									IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-										BEGIN
-											UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@OneDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-										END
-									ELSE
-										BEGIN
-											INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@OneDay,GETDATE())
-										END
-								END
-							
-							SET @strErrorDescribe=N'签到成功！'
-							
-							SELECT @IsAllDaySigned AS IsAllDaySigned
-							
-							RETURN 24
-						END
-				END
-			ELSE IF(@Type=2) --包含补签(必须七天删除一次数据)
-				BEGIN
+			--ELSE IF (EXISTS (SELECT UserID FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous = @BqNum))
+			--	BEGIN
+			--		SET @strErrorDescribe=N'�����Ѿ���ǩ'
+			--		SET @ReturnValue=25
+			--		RETURN @ReturnValue
+			--	END
 			
-					IF(@BqNum=0)--不补签
-						BEGIN
-							IF EXISTS (SELECT UserID FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND CONVERT(NVARCHAR(10),SignDate,120)=CONVERT(NVARCHAR(10),GETDATE(),120) AND SignType=0)
-								BEGIN
-									SET @strErrorDescribe=N'今日已签到！'
-									
-									RETURN 26
-								END
-							ELSE
-								BEGIN
-									IF(ISNULL(@Continuous,0)=0)
-										BEGIN
-											UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@OneDay,ALLScore=ALLScore+@OneDay WHERE UserID=@UserID
-											INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@OneDay,GETDATE(),0,1,GETDATE())
-											IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-												BEGIN
-													UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@OneDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-												END
-											ELSE
-												BEGIN
-													INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@OneDay,GETDATE())
-												END
-											SET @strErrorDescribe=N'签到成功！'
-											
-											RETURN 24
-										END
-									ELSE
-										BEGIN
-											SELECT @FirstSignDate=SignDate FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous=1
-											SET @NUM=DATEDIFF(DAY, CONVERT(NVARCHAR(10),@SignDate,120),CONVERT(NVARCHAR(10),GETDATE(),120))+1;
-											
-											IF(@NUM=1)
-												BEGIN
-													UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@OneDay,ALLScore=ALLScore+@OneDay WHERE UserID=@UserID
-													INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@OneDay,GETDATE(),0,1,GETDATE())
-													IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-														BEGIN
-															UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@OneDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-														END
-													ELSE
-														BEGIN
-															INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@OneDay,GETDATE())
-														END
-												END
-											ELSE IF(@NUM=2)
-												BEGIN
-													UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@TwoDay,ALLScore=ALLScore+@TwoDay WHERE UserID=@UserID
-													INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@TwoDay,GETDATE(),0,2,GETDATE())
-													IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-														BEGIN
-															UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@TwoDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-														END
-													ELSE
-														BEGIN
-															INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@TwoDay,GETDATE())
-														END
-												END
-											ELSE IF(@NUM=3)
-												BEGIN
-													UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@ThreeDay,ALLScore=ALLScore+@ThreeDay WHERE UserID=@UserID
-													INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@ThreeDay,GETDATE(),0,3,GETDATE())
-													IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-														BEGIN
-															UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@ThreeDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-														END
-													ELSE
-														BEGIN
-															INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@ThreeDay,GETDATE())
-														END
-												END
-											ELSE IF(@NUM=4)
-												BEGIN
-													UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@FourDay,ALLScore=ALLScore+@FourDay WHERE UserID=@UserID
-													INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@FourDay,GETDATE(),0,4,GETDATE())
-													IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-														BEGIN
-															UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@FourDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-														END
-													ELSE
-														BEGIN
-															INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@FourDay,GETDATE())
-														END
-												END
-											ELSE IF(@NUM=5)
-												BEGIN
-													UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@FiveDay,ALLScore=ALLScore+@FiveDay WHERE UserID=@UserID
-													INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@FiveDay,GETDATE(),0,5,GETDATE())
-													IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-														BEGIN
-															UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@FiveDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-														END
-													ELSE
-														BEGIN
-															INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@FiveDay,GETDATE())
-														END
-												END
-											ELSE IF(@NUM=6)
-												BEGIN
-													UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@SixDay,ALLScore=ALLScore+@SixDay WHERE UserID=@UserID
-													INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@SixDay,GETDATE(),0,6,GETDATE())
-													IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-														BEGIN
-															UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@SixDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-														END
-													ELSE
-														BEGIN
-															INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@SixDay,GETDATE())
-														END
-												END
-											ELSE IF(@NUM=7)
-												BEGIN
-													IF(SELECT COUNT(*) FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous IN (1,2,3,4,5,6,7))=7
-														BEGIN
-															SET IsAllDaySigned=1;
-															UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@SevenDay+@AllDay,ALLScore=ALLScore+@SevenDay+@AllDay WHERE UserID=@UserID
-															INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@SevenDay+@AllDay,GETDATE(),0,7,GETDATE())
-															IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-																BEGIN
-																	UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@SevenDay+@AllDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-																END
-															ELSE
-																BEGIN
-																	INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@SevenDay+@AllDay,GETDATE())
-																END
-														END
-													ELSE
-														BEGIN
-															UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@SevenDay,ALLScore=ALLScore+@SevenDay WHERE UserID=@UserID 
-															INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@SevenDay,GETDATE(),0,7,GETDATE())
-															IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-																BEGIN
-																	UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@SevenDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-																END
-															ELSE
-																BEGIN
-																	INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@SevenDay,GETDATE())
-																END
-														END
-												END
-											ELSE IF(@NUM=8)
-												BEGIN
-													DELETE FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID
-													UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@OneDay,ALLScore=ALLScore+@OneDay WHERE UserID=@UserID
-													INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@OneDay,GETDATE(),0,1,GETDATE())
-													IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-														BEGIN
-															UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@OneDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-														END
-													ELSE
-														BEGIN
-															INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@OneDay,GETDATE())
-														END
-												END
-											
-											SET @strErrorDescribe=N'签到成功！'
-											
-											SELECT @IsAllDaySigned AS IsAllDaySigned
-											
-											RETURN 24
-										END
-								END
-						END
-					ELSE IF(@BqNum>0)  --补签
-						BEGIN
-							IF EXISTS (SELECT UserID FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous=@BqNum)
-								BEGIN
-									SET @strErrorDescribe=N'该日期已签到，无须补签！'
-									
-									RETURN 26
-								END
-							ELSE
-								BEGIN
-									IF(@BqNum=2)
-										BEGIN
-											UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@TwoDay-@BqScore,ALLScore=ALLScore+@TwoDay-@BqScore WHERE UserID=@UserID
-											INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@TwoDay-@BqScore,GETDATE(),1,2,GETDATE())
-											IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-												BEGIN
-													UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@TwoDay-@BqScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-												END
-											ELSE
-												BEGIN
-													INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@TwoDay-@BqScore,GETDATE())
-												END
-										END
-									ELSE IF(@BqNum=3)
-										BEGIN
-											UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@ThreeDay-@BqScore,ALLScore=ALLScore+@ThreeDay-@BqScore WHERE UserID=@UserID
-											INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@ThreeDay-@BqScore,GETDATE(),1,3,GETDATE())
-											IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-												BEGIN
-													UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@ThreeDay-@BqScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-												END
-											ELSE
-												BEGIN
-													INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@ThreeDay-@BqScore,GETDATE())
-												END
-										END
-									ELSE IF(@BqNum=4)
-										BEGIN
-											UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@FourDay-@BqScore,ALLScore=ALLScore+@FourDay-@BqScore WHERE UserID=@UserID
-											INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@FourDay-@BqScore,GETDATE(),1,4,GETDATE())
-											IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-												BEGIN
-													UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@FourDay-@BqScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-												END
-											ELSE
-												BEGIN
-													INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@FourDay-@BqScore,GETDATE())
-												END
-										END
-									ELSE IF(@BqNum=5)
-										BEGIN
-											UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@FiveDay-@BqScore,ALLScore=ALLScore+@FiveDay-@BqScore WHERE UserID=@UserID
-											INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@FiveDay-@BqScore,GETDATE(),1,5,GETDATE())
-											IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-												BEGIN
-													UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@FiveDay-@BqScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-												END
-											ELSE
-												BEGIN
-													INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@FiveDay-@BqScore,GETDATE())
-												END
-										END
-									ELSE IF(@BqNum=6)
-										BEGIN
-											UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@SixDay-@BqScore,ALLScore=ALLScore+@SixDay-@BqScore WHERE UserID=@UserID
-											INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) VALUES(@UserID,@SixDay-@BqScore,GETDATE(),1,6,GETDATE())
-											IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-												BEGIN
-													UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@SixDay-@BqScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-												END
-											ELSE
-												BEGIN
-													INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@SixDay-@BqScore,GETDATE())
-												END
-										END
-									IF(SELECT COUNT(*) FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID AND Continuous IN (1,2,3,4,5,6,7))=7
-										BEGIN
-											--DELETE FROM QPTreasureDB.dbo.SignLog WHERE UserID=@UserID
-											SET IsAllDaySigned=1;
-											UPDATE QPTreasureDB.dbo.GameScoreInfo SET InsureScore=InsureScore+@AllDay,ALLScore=ALLScore+@AllDay WHERE UserID=@UserID
-											IF EXISTS (SELECT * FROM QPTreasureDB.dbo.SignScore WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120))
-												BEGIN
-													UPDATE QPTreasureDB.dbo.SignScore SET Score=Score+@AllDay WHERE CONVERT(NVARCHAR(10),AddTime,120)=CONVERT(NVARCHAR(10),GETDATE(),120)
-												END
-											ELSE
-												BEGIN
-													INSERT INTO QPTreasureDB.dbo.SignScore(Score,AddTime) VALUES(@AllDay,GETDATE())
-												END
-										END
-									SET @strErrorDescribe=N'补签成功！'
-									
-									SELECT @IsAllDaySigned AS IsAllDaySigned
-									
-									RETURN 27
-								END
-						END
+			----��ǩ��Ҳ����ж�
+			--ELSE IF(@Type=2 AND @ShsScore<@BqScore)
+			--	BEGIN
+			--		SET @strErrorDescribe=N'������Ϸ�Ҳ���,��ȥ������ȡ���߳�ֵ��'	
+			--		SET @ReturnValue=25
+			--		RETURN @ReturnValue
+			--	END
+			--ELSE IF(@BqNum > 0 AND @Type<>2)
+			--	BEGIN
+			--		SET @strErrorDescribe=N'ǩ�����ͺͲ�ǩ������ƥ��'	
+			--		SET @ReturnValue=25
+			--		RETURN @ReturnValue
+			--	END
+			ELSE
+				BEGIN			
+				
+					SET  @ScoreToday= CASE  
+						WHEN @Continuous=0 THEN @OneDay  
+						WHEN @Continuous=1 THEN @TwoDay  
+						WHEN @Continuous=2 THEN @ThreeDay  
+						WHEN @Continuous=3 THEN @FourDay
+						WHEN @Continuous=4 THEN @FiveDay
+						WHEN @Continuous=5 THEN @SixDay
+						WHEN @Continuous=6 THEN @SevenDay
+						WHEN @Continuous=7 THEN @OneDay
+						ELSE @OneDay  
+						END  
+					
+					--�ж��Ƿ� ����ǩ��Ϊ������
+					IF @SignToday=7
+				    BEGIN
+						SET @IsAllDaySigned=1;
+						--UPDATE QPTreasureDB.dbo.GameScoreInfo SET Score=Score+@AllDay WHERE UserID=@UserID
+						SET @ScoreToday = @ScoreToday + @AllDay
+					END
+					
+					--��ǩ������������
+					INSERT INTO QPTreasureDB.dbo.SignLog(UserID,Score,SignDate,SignType,Continuous,BSignDate) 
+					     VALUES(@UserID,@ScoreToday,@SignDate,@BSignType,@SignToday,@BSignDate)
+					
+					--ǩ���� �ӷ�
+					UPDATE QPTreasureDB.dbo.GameScoreInfo 
+					   SET Score=Score+@ScoreToday,ALLScore=ALLScore+@ScoreToday 
+					 WHERE UserID=@UserID
+					
+					SET @ReturnValue=24
+					
+					SET @strErrorDescribe=N'ǩ���ɹ���'
+					
+					SELECT @IsAllDaySigned AS IsAllDaySigned
+					
+					RETURN @ReturnValue
 				END
 		END
 END
+			
